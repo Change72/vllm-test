@@ -211,7 +211,7 @@ def main(args):
 
         lmcache_config_file = args.lmcache_config_file
         if not os.path.exists(lmcache_config_file):
-            raise FileNotFoundError(f"LMCache config file not found: {lmcache_config_file}")
+            raise FileNotFoundError(f"LMCache config not found: {lmcache_config_file}")
 
         env_vars = {
             "LMCACHE_CONFIG_FILE": lmcache_config_file,
