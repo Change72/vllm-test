@@ -32,6 +32,7 @@ import dataclasses
 import json
 import random
 import time
+import os
 from typing import Optional
 
 from transformers import PreTrainedTokenizerBase
@@ -39,6 +40,10 @@ from transformers import PreTrainedTokenizerBase
 from vllm import LLM, SamplingParams
 from vllm.engine.arg_utils import EngineArgs
 from vllm.utils import FlexibleArgumentParser
+
+from lmcache.v1.cache_engine import LMCacheEngineBuilder
+from lmcache.integration.vllm.utils import ENGINE_NAME
+from vllm.config import KVTransferConfig
 
 try:
     from vllm.transformers_utils.tokenizer import get_tokenizer
@@ -197,6 +202,34 @@ def main(args):
 
     engine_args = EngineArgs.from_cli_args(args)
 
+    if args.enable_lmcache:
+        # env_vars = {
+        #     "LMCACHE_CHUNK_SIZE": "256",         # Set tokens per chunk
+        #     "LMCACHE_LOCAL_CPU": "True",         # Enable local CPU backend
+        #     "LMCACHE_MAX_LOCAL_CPU_SIZE": str(5)  # Dynamic CPU memory limit (GB)
+        # }
+
+        lmcache_config_file = args.lmcache_config_file
+        if not os.path.exists(lmcache_config_file):
+            raise FileNotFoundError(f"LMCache config file not found: {lmcache_config_file}")
+
+        env_vars = {
+            "LMCACHE_CONFIG_FILE": lmcache_config_file,
+            "LMCACHE_USE_EXPERIMENTAL": "True"
+        } 
+
+        for key, value in env_vars.items():
+            os.environ[key] = value
+
+        ktc = KVTransferConfig(
+            kv_connector="LMCacheConnectorV1",
+            kv_role="kv_both",
+        )
+
+        engine_args.kv_transfer_config = ktc
+
+    print(f"Engine args: {dataclasses.asdict(engine_args)}")
+
     llm = LLM(**dataclasses.asdict(engine_args))
 
     sampling_params = SamplingParams(
@@ -266,7 +299,17 @@ def create_argument_parser():
             "detokenization time in the latency measurement)"
         ),
     )
-
+    parser.add_argument(
+        "--enable-lmcache", 
+        action="store_true",
+        help="Enable LMCache for offloading (default: True)"
+    )
+    parser.add_argument(
+        "--lmcache-config-file", 
+        type=str, 
+        default="lmcache_config/disk-offload.yaml", 
+        help="Path to the LMCache config file"
+    )
     parser = EngineArgs.add_cli_args(parser)
 
     return parser
