@@ -35,6 +35,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Optional
 
 import torch
+import threading
 
 from vllm.logger import init_logger
 from vllm.v1.core.sched.output import SchedulerOutput
@@ -74,6 +75,7 @@ class KVConnectorBase_V1(ABC):
         self._connector_metadata = KVConnectorMetadata()
         self._vllm_config = vllm_config
         self._role = role
+        self.saved_requests = set()
 
     @property
     def role(self) -> KVConnectorRole:
@@ -199,6 +201,12 @@ class KVConnectorBase_V1(ABC):
             The finished saves/sends req ids must belong to a set provided in a
             call to this method (this call or a prior one).
         """
+        logger.info(
+            "The default get_finished is called. This should be overridden "
+            "by the KVConnector implementation to return the ids of requests "
+            "that have finished asynchronous transfer. The request ids are: %s.",
+            finished_req_ids
+        )
         return None, None
 
     # ==============================
@@ -280,4 +288,14 @@ class KVConnectorBase_V1(ABC):
             Optional KVTransferParams to be included in the request outputs
             returned by the engine.
         """
+        print(f"The default request finished is called")
         return False, None
+
+    def async_wait_for_save(self):
+        # Now schedule wait_for_save in a background thread
+        def save_task():
+            self.wait_for_save()  # This will call store(), then signal completion
+
+        print("Starting async wait for save in a background thread")
+        thread = threading.Thread(target=save_task)
+        thread.start()

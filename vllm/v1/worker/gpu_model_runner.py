@@ -1209,6 +1209,10 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         # Prepare the decoder inputs.
         (attn_metadata, attention_cuda_graphs, logits_indices,
          spec_decode_metadata) = (self._prepare_inputs(scheduler_output))
+        logger.info(
+            f"scheduler_output: {scheduler_output}, "
+        )
+
         num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
         if (self.use_cuda_graph
                 and num_scheduled_tokens <= self.cudagraph_batch_sizes[-1]):
@@ -1295,8 +1299,10 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                 intermediate_tensors=intermediate_tensors,
                 inputs_embeds=inputs_embeds,
             )
-
+            write_start = time.time()
             self.maybe_wait_for_kv_save()
+            write_end = time.time()
+            print(f"KV save took {write_end - write_start:.4f} seconds")
             finished_sending, finished_recving = (
                 self.get_finished_kv_transfers(scheduler_output))
 
@@ -1574,7 +1580,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
     @staticmethod
     def maybe_wait_for_kv_save() -> None:
         if has_kv_transfer_group():
-            get_kv_transfer_group().wait_for_save()
+            # get_kv_transfer_group().wait_for_save()
+            get_kv_transfer_group().async_wait_for_save()
 
     @staticmethod
     def get_finished_kv_transfers(

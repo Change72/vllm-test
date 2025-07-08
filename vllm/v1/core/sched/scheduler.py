@@ -155,6 +155,8 @@ class Scheduler(SchedulerInterface):
             enable_kv_cache_events=self.enable_kv_cache_events,
         )
 
+        self.delay_free_requests: set[Request] = set()
+
     def schedule(self) -> SchedulerOutput:
         # NOTE(woosuk) on the scheduling algorithm:
         # There's no "decoding phase" nor "prefill phase" in the scheduler.
@@ -879,6 +881,9 @@ class Scheduler(SchedulerInterface):
         request_ids: Union[str, Iterable[str]],
         finished_status: RequestStatus,
     ) -> None:
+        for request in self.delay_free_requests:
+            self._free_request(request)
+
         """Handles the finish signal from outside the scheduler.
 
         For example, the API server can abort a request when the client
@@ -917,6 +922,9 @@ class Scheduler(SchedulerInterface):
 
         if not delay_free_blocks:
             self._free_blocks(request)
+        else:
+            # If the blocks are delayed, we will free them later.
+            self.delay_free_requests.add(request)
 
         return kv_xfer_params
 
@@ -1042,4 +1050,10 @@ class Scheduler(SchedulerInterface):
             self.finished_recving_kv_req_ids.add(req_id)
         for req_id in (model_runner_output.finished_sending or ()):
             logger.debug("Finished sending KV transfer for request %s", req_id)
+            if req_id not in self.requests:
+                logger.warning(
+                    "Request %s is not found in the scheduler state. "
+                    "This may happen if the request was already finished.",
+                    req_id)
+                continue
             self._free_blocks(self.requests[req_id])

@@ -132,3 +132,44 @@ class LMCacheConnectorV1(KVConnectorBase_V1):
             scheduler_output (SchedulerOutput): the scheduler output object.
         """
         return self._lmcache_engine.build_connector_meta(scheduler_output)
+
+    def request_finished(
+        self,
+        request: "Request",
+        block_ids: list[int],
+    ):
+        """
+        Called when a request is finished. This is used to
+        update the KV cache state and return any KV transfer
+        parameters.
+
+        Args:
+            request (Request): the request object.
+            block_ids (list[int]): the list of block IDs that were used
+                for this request.
+
+        Returns:
+            A tuple of (request_finished, kv_xfer_params).
+            request_finished: whether the request is finished.
+            kv_xfer_params: Optional KVTransferParams to be included in the
+                request outputs returned by the engine.
+        """
+        print(f"LMCacheConnectorV1: request_finished called")
+        return self._lmcache_engine.request_finished(request, block_ids)
+
+    def get_finished(self, finished_req_ids: set[str]):
+        """
+        Get the finished request ids for the given set of request ids.
+        This is used to check if any requests have finished transferring
+        KV cache data.
+
+        Args:
+            finished_req_ids (set[str]): the set of request ids that have
+                finished transferring KV cache data.
+
+        Returns:
+            A tuple of (finished_saves, finished_sends).
+            finished_saves: the set of request ids that have finished saving.
+            finished_sends: the set of request ids that have finished sending.
+        """
+        return self._lmcache_engine.get_finished(finished_req_ids)
